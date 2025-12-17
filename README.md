@@ -8,6 +8,7 @@ A powerful Python bot that automatically forwards messages from Telegram source 
 - 🔍 **Keyword Filtering**: Only forward messages containing specific keywords (Case-Insensitive)
 - 📝 **Signature Removal**: Automatically remove signatures from forwarded messages
 - 📜 **Old Message Scanning**: Scan and forward old messages from channels
+- 📅 **Date Range Filtering**: Restrict processing to a start/end date window
 - ⏯️ **Smart Resume**: Remembers the last processed message ID to avoid duplicates and resume scanning efficiently (works even in Copy mode)
 - 🎯 **Multiple Modes**: 
   - `past` - Scan old messages (if enabled), forward matches, then exit
@@ -58,7 +59,7 @@ You'll be asked to provide:
 - **API ID**: Your Telegram API ID (number)
 - **API HASH**: Your Telegram API Hash (string)
 - **Phone**: Your phone number in international format (e.g., +989123456789)
-- **Source channels**: Comma-separated list of source channel IDs (must be integers, e.g., `-1001234567890`)
+- **Source channels**: Comma-separated list of source channel IDs (must be integers, e.g., `-123456789`)
 - **Destination channels**: Comma-separated list of destination channel IDs (must be integers)
 - **Keywords**: Comma-separated keywords to filter messages (leave empty to forward all in `past` and `both` modes; ignored in `live` mode)
 - **Remove signature**: `y` to remove signatures, `n` to keep them
@@ -135,7 +136,7 @@ To get a channel ID:
 2. The bot will reply with the channel ID
 3. Or use [@getidsbot](https://t.me/getidsbot)
 
-**Note**: Channel IDs are usually negative numbers (e.g., `-1001234567890`)
+**Note**: Channel IDs are usually negative numbers (e.g., `-123456789`)
 
 ## 🎛️ Advanced Features
 
