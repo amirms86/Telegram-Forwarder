@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 from telethon import TelegramClient, events
+from telethon.tl.types import MessageMediaWebPage
 from colorama import Fore, init
 from utils import match_keywords, strip_signature, highlight_keywords
 from state_manager import get_last_read_message_id, update_last_read_message_id
@@ -106,14 +107,20 @@ class Forwarder:
             if self.highlight_keywords and text:
                 text = highlight_keywords(text, self.keywords)
 
-            if msg.media:
+            has_downloadable_media = bool(msg.media) and not isinstance(msg.media, MessageMediaWebPage)
+            if has_downloadable_media:
                 await self.client.send_file(dest, msg.media, caption=text if text else None)
-            elif text:
-                await self.client.send_message(dest, text)
-            else:
-                await msg.forward_to(dest)
-                return "Forwarded (fallback)"
-            return "Copied"
+                return "Copied"
+            if text:
+                final_text = text
+                wp = getattr(msg.media, "webpage", None)
+                url = getattr(wp, "url", None) if wp else None
+                if url and (url not in final_text):
+                    final_text = f"{final_text}\n{url}" if final_text else url
+                await self.client.send_message(dest, final_text)
+                return "Copied"
+            await msg.forward_to(dest)
+            return "Forwarded (fallback)"
 
     async def forward_old_messages(self):
         count = 0
