@@ -14,6 +14,7 @@ A powerful Python bot that automatically forwards messages from Telegram source 
   - `past` - Scan old messages (if enabled), forward matches, then exit
   - `live` - Forward all new messages without keyword filtering (no old message scanning)
   - `both` - Forward only messages matching keywords for both old and live messages
+  - `id_range` - Forward messages within a specific message ID range
 - 🏷️ **Forward Tag Control**: Choose to show or hide the "Forwarded from" tag in Telegram
 - 🎨 **Colorful Console Output**: Beautiful colored terminal output for better monitoring
 
@@ -30,7 +31,7 @@ A powerful Python bot that automatically forwards messages from Telegram source 
 1. **Clone the repository**
    ```bash
    git clone https://github.com/amirms86/Telegram-Forwarder
-   cd Forwarder
+   cd Telegram-Forwarder
    ```
 
 2. **Install dependencies**
@@ -72,9 +73,9 @@ You'll be asked to provide:
 
 ### Configuration File
 
-Your settings are saved in `config.json`. You can edit this file directly or run the setup again.
+Your settings are saved in `data/config.json`. You can edit this file directly or run the setup again.
 
-Example `config.json`:
+Example `data/config.json`:
 ```json
 {
     "api_id": 12345678,
@@ -86,15 +87,16 @@ Example `config.json`:
     "remove_signature": true,
     "signature_delimiters": ["--"],
     "limit_messages": 100,
-    "session_name": "user",
-    "mode": "",
+    "session_name": "data/user",
+    "mode": "both",
     "scan_old": true,
     "scan_all": false,
     "show_forward_tag": false,
     "start_date": "",
     "end_date": "",
     "resume_from_last": true,
-    "highlight_keywords": true
+    "highlight_keywords": true,
+    "append_timestamp_footer": false
 }
 ```
 
@@ -125,6 +127,10 @@ Example `config.json`:
   - Scans old messages (if enabled) and forwards only those matching keywords
   - Monitors live messages and forwards only those matching keywords
   - Similar to `past` mode but explicitly designed for both historical and live monitoring
+  
+- **`id_range` mode**:
+  - Forwards messages whose IDs fall within a specific range you provide
+  - Useful for reprocessing a known slice of history without scanning everything
   
 ### Keyword Highlighting
 - When `highlight_keywords` is enabled, matched keywords in forwarded text are sent with bold + italic + underline formatting.
@@ -169,13 +175,15 @@ You can customize delimiters in `config.json` under `signature_delimiters`.
 ## 📁 Project Structure
 
 ```
-Forwarder/
+Telegram-Forwarder/
 ├── main.py              # Main entry point and configuration setup
 ├── core.py              # Core forwarding logic
 ├── config_manager.py    # Configuration file management
 ├── state_manager.py     # Manages resume state (last processed IDs)
 ├── utils.py             # Utility functions (keyword matching, signature removal)
-├── config.json          # Your configuration file (created after first run)
+├── data/                # Config and session files
+│   ├── config.json      # Your configuration file (created after first run)
+│   └── user.session     # Your Telethon session file (name varies)
 ├── forwarder_state.json # Stores last processed message IDs
 ├── requirements.txt     # Python dependencies
 └── README.md            # This file
@@ -191,7 +199,8 @@ Forwarder/
 - **Security**: Never share your `config.json` file or session files (`user.session`) as they contain sensitive credentials
 - **Rate Limits**: Telegram has rate limits. Be careful when scanning large numbers of old messages
 - **Permissions**: Make sure your account has permission to read from source channels and write to destination channels
-- **Session Files**: The session file (`user.session`) stores your login session. Keep it secure!
+- **Session Files**: The session file (e.g., `data/user.session`) stores your login session. Keep it secure!
+- **Data Directory**: The `data/` directory is created automatically when saving configuration or starting the client. You usually don't need to create it manually.
 
 ## 🐛 Troubleshooting
 
