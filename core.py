@@ -1,4 +1,5 @@
 import asyncio
+import os
 from datetime import datetime, timezone
 from telethon import TelegramClient, events
 from telethon.errors.rpcerrorlist import FloodWaitError, SlowModeWaitError, ChatWriteForbiddenError, UserBannedInChannelError, PeerFloodError, ChannelPrivateError, ChannelInvalidError, ChatAdminRequiredError
@@ -31,7 +32,13 @@ class Forwarder:
         if not isinstance(cfg["session_name"], str) or not cfg["session_name"]:
             raise ValueError("session_name must be a non-empty string")
         
-        self.client = TelegramClient(cfg["session_name"], cfg["api_id"], cfg["api_hash"])
+        sname = cfg["session_name"]
+        if not os.path.isabs(sname) and not os.path.dirname(sname):
+            sname = os.path.join("data", sname)
+        dirn = os.path.dirname(sname)
+        if dirn:
+            os.makedirs(dirn, exist_ok=True)
+        self.client = TelegramClient(sname, cfg["api_id"], cfg["api_hash"])
         self.client.parse_mode = 'html'
         
         if not isinstance(cfg["sources"], list):
@@ -71,18 +78,37 @@ class Forwarder:
         self.show_forward_tag = cfg.get("show_forward_tag", True)
         self.resume_from_last = cfg.get("resume_from_last", False)
         self.highlight_keywords = cfg.get("highlight_keywords", cfg.get("bold_keywords", False))
+        self.append_timestamp_footer = bool(cfg.get("append_timestamp_footer", False))
+        self.id_min = cfg.get("id_min", None)
+        self.id_max = cfg.get("id_max", None)
         self._dest_locks = {}
         self.min_send_interval = 0.0
         self._global_send_lock = asyncio.Lock()
         self._last_send_ts = 0.0
-        self.max_flood_wait = 180
+        self.max_flood_wait = None
+        self.caption_limit = 1024
         
         if not self.sources:
             raise ValueError("At least one source channel is required")
         if not self.destinations:
             raise ValueError("At least one destination channel is required")
-        if self.mode not in ("past", "live", "both"):
+        if self.mode not in ("past", "live", "both", "id_range"):
             print(Fore.YELLOW + f"Invalid mode '{self.mode}', defaulting to 'both'")
+            self.mode = "both"
+        try:
+            if self.id_min is not None:
+                self.id_min = int(self.id_min)
+        except Exception:
+            print(Fore.RED + "Invalid id_min. Ignoring.")
+            self.id_min = None
+        try:
+            if self.id_max is not None:
+                self.id_max = int(self.id_max)
+        except Exception:
+            print(Fore.RED + "Invalid id_max. Ignoring.")
+            self.id_max = None
+        if self.mode == "id_range" and (self.id_min is None or self.id_max is None or self.id_min > self.id_max):
+            print(Fore.RED + "Invalid id_range configuration. Please set id_min <= id_max.")
             self.mode = "both"
 
         self.start_date = None
@@ -125,16 +151,10 @@ class Forwarder:
                 return res
             except (FloodWaitError, FloodWaitErrorAlt) as e:
                 s = getattr(e, "seconds", 0)
-                print(Fore.YELLOW + f"Flood wait {s}s required")
-                if s > self.max_flood_wait:
-                    raise RuntimeError(f"Skip send due to flood wait {s}s")
                 await asyncio.sleep(s + 1)
                 continue
             except (SlowModeWaitError, SlowModeWaitErrorAlt) as e:
                 s = getattr(e, "seconds", 0)
-                print(Fore.YELLOW + f"Slow mode wait {s}s required")
-                if s > self.max_flood_wait:
-                    raise RuntimeError(f"Skip send due to slow mode {s}s")
                 await asyncio.sleep(s + 1)
                 continue
             except (ChatWriteForbiddenError, UserBannedInChannelError) as e:
@@ -150,12 +170,8 @@ class Forwarder:
         lock = self._get_lock(dest)
         async with lock:
             if self.show_forward_tag:
-                try:
-                    await self._with_retry(lambda: msg.forward_to(dest))
-                    return "Forwarded"
-                except RuntimeError as e:
-                    print(Fore.YELLOW + str(e))
-                    return "Skipped"
+                await self._with_retry(lambda: msg.forward_to(dest))
+                return "Forwarded"
             else:
                 text = msg.text or ""
                 if self.remove_signature and text:
@@ -164,32 +180,58 @@ class Forwarder:
                 if self.highlight_keywords and text:
                     text = highlight_keywords(text, self.keywords)
 
+                footer = ""
+                if self.append_timestamp_footer:
+                    orig = getattr(getattr(msg, "fwd_from", None), "date", None) or msg.date
+                    if getattr(orig, "tzinfo", None) is None:
+                        orig = orig.replace(tzinfo=timezone.utc)
+                    dt_local = orig.astimezone()
+                    footer = "\n\n" + f"{dt_local.strftime('%Y-%m-%d %H:%M')}"
+
                 has_downloadable_media = bool(msg.media) and not isinstance(msg.media, MessageMediaWebPage)
                 if has_downloadable_media:
-                    try:
-                        await self._with_retry(lambda: self.client.send_file(dest, msg.media, caption=text if text else None))
-                        return "Copied"
-                    except RuntimeError as e:
-                        print(Fore.YELLOW + str(e))
-                        return "Skipped"
+                    cap = (text + footer) if footer else (text if text else None)
+                    if cap and len(cap) > self.caption_limit:
+                        await self._with_retry(lambda: self.client.send_file(dest, msg.media))
+                        await self._with_retry(lambda: self.client.send_message(dest, cap))
+                    else:
+                        await self._with_retry(lambda: self.client.send_file(dest, msg.media, caption=cap))
+                    return "Copied"
                 if text:
                     final_text = text
                     wp = getattr(msg.media, "webpage", None)
                     url = getattr(wp, "url", None) if wp else None
                     if url and (url not in final_text):
                         final_text = f"{final_text}\n{url}" if final_text else url
-                    try:
-                        await self._with_retry(lambda: self.client.send_message(dest, final_text))
-                        return "Copied"
-                    except RuntimeError as e:
-                        print(Fore.YELLOW + str(e))
-                        return "Skipped"
-                try:
-                    await self._with_retry(lambda: msg.forward_to(dest))
-                    return "Forwarded (fallback)"
-                except RuntimeError as e:
-                    print(Fore.YELLOW + str(e))
-                    return "Skipped"
+                    if footer:
+                        final_text = f"{final_text}{footer}"
+                    await self._with_retry(lambda: self.client.send_message(dest, final_text))
+                    return "Copied"
+                await self._with_retry(lambda: msg.forward_to(dest))
+                return "Forwarded (fallback)"
+
+    async def forward_id_range(self):
+        count = 0
+        for src in self.sources:
+            try:
+                min_id = (self.id_min - 1) if self.id_min is not None else None
+                max_id = (self.id_max + 1) if self.id_max is not None else None
+                had_any = False
+                async for msg in self.client.iter_messages(src, reverse=True, min_id=min_id, max_id=max_id):
+                    had_any = True
+                    for d in self.destinations:
+                        try:
+                            action = await self._process_and_send(d, msg)
+                            print(Fore.GREEN + f"{action} message from {src} -> {d}")
+                            count += 1
+                        except Exception as e:
+                            print(Fore.RED + f"Failed to process from {src} to {d}: {e}")
+                    update_last_read_message_id(src, msg.id)
+                if not had_any:
+                    print(Fore.YELLOW + f"No messages in range for source {src}")
+            except Exception as e:
+                print(Fore.RED + f"Error accessing source {src}: {e}")
+        print(Fore.CYAN + f"Processed id range messages: {count}")
 
     async def forward_old_messages(self):
         count = 0
@@ -233,11 +275,10 @@ class Forwarder:
                     print(Fore.YELLOW + f"Scanning source {src} starting after ID {min_id} (Limit: {limit if limit else 'All'})...")
                 else:
                     print(Fore.YELLOW + f"Scanning source {src} (Limit: {limit if limit else 'All'})...")
-                messages = await self.client.get_messages(src, limit=limit, min_id=min_id)
-                if not messages:
-                    print(Fore.YELLOW + f"No new messages found in source {src}")
-                    continue
-                for msg in reversed(messages):
+                processed = 0
+                had_any = False
+                async for msg in self.client.iter_messages(src, reverse=True, min_id=min_id):
+                    had_any = True
                     if self.start_date and msg.date.date() < self.start_date:
                         continue
                     if self.end_date and msg.date.date() > self.end_date:
@@ -254,6 +295,12 @@ class Forwarder:
                                 print(Fore.RED + f"Failed to process from {src} to {d}: {e}")
 
                     update_last_read_message_id(src, msg.id)
+                    if limit is not None:
+                        processed += 1
+                        if processed >= limit:
+                            break
+                if not had_any:
+                    print(Fore.YELLOW + f"No new messages found in source {src}")
 
             except Exception as e:
                 print(Fore.RED + f"Error accessing source {src}: {e}")
@@ -304,6 +351,10 @@ class Forwarder:
             print(Fore.CYAN + "Mode is 'both': Old message scanning completed. Now forwarding new messages live.")
         elif self.mode == "live":
             print(Fore.YELLOW + "Mode is 'live': Old message scanning is paused. Only forwarding new messages.")
+        elif self.mode == "id_range":
+            await self.forward_id_range()
+            await self.client.disconnect()
+            return
         self.register_handlers()
         print(Fore.GREEN + "Listening for new messages...")
         await self.client.run_until_disconnected()
