@@ -1,4 +1,5 @@
 import asyncio
+import os
 from config_manager import load_config, save_config
 from core import Forwarder
 
@@ -56,6 +57,7 @@ def request_config():
 
     resume_from_last = input("Resume from last forwarded message? (y/n): ").lower() == "y"
     highlight_keywords = input("Highlight keywords in message? (y/n): ").lower() == "y"
+    append_timestamp_footer = input("Append original date/time footer? (y/n): ").lower() == "y"
 
     scan_old = input("Scan old messages? (y/n): ").lower() == "y"
     raw_limit = input("Old scan limit (leave empty for ALL): ").strip()
@@ -82,11 +84,26 @@ def request_config():
             break
         print("Session name cannot be empty. Please enter a valid session name.")
     
-    mode = input("Mode (past/live/both): ").lower().strip()
-    if mode not in ("past", "live", "both"):
+    mode = input("Mode (past/live/both/id_range): ").lower().strip()
+    if mode not in ("past", "live", "both", "id_range"):
         while mode not in ("past", "live", "both"):
             mode = input("Invalid mode. Enter one of past/live/both: ").lower().strip()
+    id_min = None
+    id_max = None
+    if mode == "id_range":
+        while True:
+            try:
+                id_min = int(input("ID range start (min): ").strip())
+                id_max = int(input("ID range end (max): ").strip())
+                if id_min <= id_max:
+                    break
+                else:
+                    print("Invalid range. min must be <= max.")
+            except ValueError:
+                print("Invalid input. Please enter numeric IDs for range.")
 
+    # Place session file under data/
+    session_path = os.path.join("data", session_name)
     cfg = {
         "api_id": api_id,
         "api_hash": api_hash,
@@ -97,7 +114,7 @@ def request_config():
         "remove_signature": remove_signature,
         "signature_delimiters": signature_delimiters,
         "limit_messages": limit_messages,
-        "session_name": session_name,
+        "session_name": session_path,
         "mode": mode,
         "scan_old": scan_old,
         "scan_all": scan_all,
@@ -105,8 +122,12 @@ def request_config():
         "start_date": start_date,
         "end_date": end_date,
         "resume_from_last": resume_from_last,
-        "highlight_keywords": highlight_keywords
+        "highlight_keywords": highlight_keywords,
+        "append_timestamp_footer": append_timestamp_footer
     }
+    if mode == "id_range":
+        cfg["id_min"] = id_min
+        cfg["id_max"] = id_max
 
     save_config(cfg)
     return cfg
@@ -119,6 +140,31 @@ async def start_loop():
         if "highlight_keywords" not in cfg and "bold_keywords" in cfg:
             cfg["highlight_keywords"] = bool(cfg.get("bold_keywords", False))
             cfg.pop("bold_keywords", None)
+        if cfg.get("mode") == "id_range":
+            ok = True
+            try:
+                if "id_min" not in cfg or "id_max" not in cfg:
+                    ok = False
+                else:
+                    int(cfg["id_min"]); int(cfg["id_max"])
+                    if int(cfg["id_min"]) > int(cfg["id_max"]):
+                        ok = False
+            except Exception:
+                ok = False
+            if not ok:
+                while True:
+                    try:
+                        id_min = int(input("ID range start (min): ").strip())
+                        id_max = int(input("ID range end (max): ").strip())
+                        if id_min <= id_max:
+                            cfg["id_min"] = id_min
+                            cfg["id_max"] = id_max
+                            save_config(cfg)
+                            break
+                        else:
+                            print("Invalid range. min must be <= max.")
+                    except ValueError:
+                        print("Invalid input. Please enter numeric IDs for range.")
 
     try:
         fwd = Forwarder(cfg)
