@@ -1,6 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
 from telethon import TelegramClient, events
+from telethon.errors.rpcerrorlist import FloodWaitError, SlowModeWaitError, ChatWriteForbiddenError, UserBannedInChannelError, PeerFloodError, ChannelPrivateError, ChannelInvalidError, ChatAdminRequiredError
+from telethon.errors import FloodWaitError as FloodWaitErrorAlt, SlowModeWaitError as SlowModeWaitErrorAlt
 from telethon.tl.types import MessageMediaWebPage
 from colorama import Fore, init
 from utils import match_keywords, strip_signature, highlight_keywords
@@ -69,6 +71,11 @@ class Forwarder:
         self.show_forward_tag = cfg.get("show_forward_tag", True)
         self.resume_from_last = cfg.get("resume_from_last", False)
         self.highlight_keywords = cfg.get("highlight_keywords", cfg.get("bold_keywords", False))
+        self._dest_locks = {}
+        self.min_send_interval = 0.0
+        self._global_send_lock = asyncio.Lock()
+        self._last_send_ts = 0.0
+        self.max_flood_wait = 180
         
         if not self.sources:
             raise ValueError("At least one source channel is required")
@@ -95,32 +102,94 @@ class Forwarder:
     async def start(self):
         await self.client.start(self.cfg["phone"])
 
-    async def _process_and_send(self, dest, msg):
-        if self.show_forward_tag:
-            await msg.forward_to(dest)
-            return "Forwarded"
-        else:
-            text = msg.text or ""
-            if self.remove_signature and text:
-                text = strip_signature(text, self.signature_delimiters)
-            
-            if self.highlight_keywords and text:
-                text = highlight_keywords(text, self.keywords)
+    def _get_lock(self, dest):
+        lock = self._dest_locks.get(dest)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._dest_locks[dest] = lock
+        return lock
 
-            has_downloadable_media = bool(msg.media) and not isinstance(msg.media, MessageMediaWebPage)
-            if has_downloadable_media:
-                await self.client.send_file(dest, msg.media, caption=text if text else None)
-                return "Copied"
-            if text:
-                final_text = text
-                wp = getattr(msg.media, "webpage", None)
-                url = getattr(wp, "url", None) if wp else None
-                if url and (url not in final_text):
-                    final_text = f"{final_text}\n{url}" if final_text else url
-                await self.client.send_message(dest, final_text)
-                return "Copied"
-            await msg.forward_to(dest)
-            return "Forwarded (fallback)"
+    async def _with_retry(self, fn):
+        while True:
+            try:
+                async with self._global_send_lock:
+                    if self.min_send_interval > 0:
+                        now = asyncio.get_running_loop().time()
+                        if self._last_send_ts > 0:
+                            delta = now - self._last_send_ts
+                            if delta < self.min_send_interval:
+                                await asyncio.sleep(self.min_send_interval - delta)
+                res = await fn()
+                async with self._global_send_lock:
+                    self._last_send_ts = asyncio.get_running_loop().time()
+                return res
+            except (FloodWaitError, FloodWaitErrorAlt) as e:
+                s = getattr(e, "seconds", 0)
+                print(Fore.YELLOW + f"Flood wait {s}s required")
+                if s > self.max_flood_wait:
+                    raise RuntimeError(f"Skip send due to flood wait {s}s")
+                await asyncio.sleep(s + 1)
+                continue
+            except (SlowModeWaitError, SlowModeWaitErrorAlt) as e:
+                s = getattr(e, "seconds", 0)
+                print(Fore.YELLOW + f"Slow mode wait {s}s required")
+                if s > self.max_flood_wait:
+                    raise RuntimeError(f"Skip send due to slow mode {s}s")
+                await asyncio.sleep(s + 1)
+                continue
+            except (ChatWriteForbiddenError, UserBannedInChannelError) as e:
+                raise e
+            except (PeerFloodError,) as e:
+                raise RuntimeError("Skip send due to peer flood")
+            except (ChannelPrivateError, ChannelInvalidError, ChatAdminRequiredError) as e:
+                raise e
+            except Exception as e:
+                raise e
+
+    async def _process_and_send(self, dest, msg):
+        lock = self._get_lock(dest)
+        async with lock:
+            if self.show_forward_tag:
+                try:
+                    await self._with_retry(lambda: msg.forward_to(dest))
+                    return "Forwarded"
+                except RuntimeError as e:
+                    print(Fore.YELLOW + str(e))
+                    return "Skipped"
+            else:
+                text = msg.text or ""
+                if self.remove_signature and text:
+                    text = strip_signature(text, self.signature_delimiters)
+                
+                if self.highlight_keywords and text:
+                    text = highlight_keywords(text, self.keywords)
+
+                has_downloadable_media = bool(msg.media) and not isinstance(msg.media, MessageMediaWebPage)
+                if has_downloadable_media:
+                    try:
+                        await self._with_retry(lambda: self.client.send_file(dest, msg.media, caption=text if text else None))
+                        return "Copied"
+                    except RuntimeError as e:
+                        print(Fore.YELLOW + str(e))
+                        return "Skipped"
+                if text:
+                    final_text = text
+                    wp = getattr(msg.media, "webpage", None)
+                    url = getattr(wp, "url", None) if wp else None
+                    if url and (url not in final_text):
+                        final_text = f"{final_text}\n{url}" if final_text else url
+                    try:
+                        await self._with_retry(lambda: self.client.send_message(dest, final_text))
+                        return "Copied"
+                    except RuntimeError as e:
+                        print(Fore.YELLOW + str(e))
+                        return "Skipped"
+                try:
+                    await self._with_retry(lambda: msg.forward_to(dest))
+                    return "Forwarded (fallback)"
+                except RuntimeError as e:
+                    print(Fore.YELLOW + str(e))
+                    return "Skipped"
 
     async def forward_old_messages(self):
         count = 0
