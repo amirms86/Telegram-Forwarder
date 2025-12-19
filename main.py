@@ -86,8 +86,8 @@ def request_config():
     
     mode = input("Mode (past/live/both/id_range): ").lower().strip()
     if mode not in ("past", "live", "both", "id_range"):
-        while mode not in ("past", "live", "both"):
-            mode = input("Invalid mode. Enter one of past/live/both: ").lower().strip()
+        while mode not in ("past", "live", "both", "id_range"):
+            mode = input("Invalid mode. Enter one of past/live/both/id_range: ").lower().strip()
     id_min = None
     id_max = None
     if mode == "id_range":
