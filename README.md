@@ -12,7 +12,7 @@ A powerful Python bot that automatically forwards messages from Telegram source 
 - ⏯️ **Smart Resume**: Remembers the last processed message ID to avoid duplicates and resume scanning efficiently (works even in Copy mode)
 - 🎯 **Multiple Modes**: 
   - `past` - Scan old messages (if enabled), forward matches, then exit
-  - `live` - Forward all new messages without keyword filtering (no old message scanning)
+  - `live` - Forward all new messages with keyword filtering (no old message scanning)
   - `both` - Forward only messages matching keywords for both old and live messages
   - `id_range` - Forward messages within a specific message ID range
 - 🏷️ **Forward Tag Control**: Choose to show or hide the "Forwarded from" tag in Telegram
@@ -62,14 +62,14 @@ You'll be asked to provide:
 - **Phone**: Your phone number in international format (e.g., +989123456789)
 - **Source channels**: Comma-separated list of source channel IDs (must be integers, e.g., `-123456789`)
 - **Destination channels**: Comma-separated list of destination channel IDs (must be integers)
-- **Keywords**: Comma-separated keywords to filter messages (leave empty to forward all in `past` and `both` modes; ignored in `live` mode)
+- **Keywords**: Comma-separated keywords to filter messages (applies in all modes; leave empty to forward all)
 - **Remove signature**: `y` to remove signatures, `n` to keep them
 - **Show 'Forwarded from' tag**: `y` to show the forward tag, `n` to hide it (copies message instead)
 - **Start/End Date**: Optional date range (YYYY-MM-DD). If both are set, old scanning is restricted to this window and live forwarding only processes messages within the same window.
 - **Resume from last**: `y` to resume from the last processed message (uses `forwarder_state.json`)
 - **Old scan limit**: Number of old messages to scan (enter `0` or leave empty to scan ALL)
 - **Session name**: Name for your Telegram session file
-- **Mode**: Choose `past`, `live`, or `both`
+- **Mode**: Choose `past`, `live`, `both`, or `id_range`
 
 ### Configuration File
 
@@ -120,7 +120,7 @@ Example `data/config.json`:
   - Exits automatically after old message processing finishes (no live monitoring)
   
 - **`live` mode**: 
-  - Forwards ALL new messages without keyword filtering
+  - Forwards new messages that match `keywords` (leave `keywords` empty to forward all)
   - Does not scan old messages
 
 - **`both` mode**: 
