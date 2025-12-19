@@ -322,7 +322,8 @@ class Forwarder:
                 within_date = False
             
             if self.mode == "live":
-                should_forward = True
+                if match_keywords(text, self.keywords):
+                    should_forward = True
             elif self.mode in ("past", "both"):
                 if match_keywords(text, self.keywords):
                     should_forward = True
