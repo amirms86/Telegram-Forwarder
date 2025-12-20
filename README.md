@@ -68,7 +68,7 @@ You'll be asked to provide:
 - **Start/End Date**: Optional date range (YYYY-MM-DD). If both are set, old scanning is restricted to this window and live forwarding only processes messages within the same window.
 - **Resume from last**: `y` to resume from the last processed message (uses `forwarder_state.json`)
 - **Old scan limit**: Number of old messages to scan (enter `0` or leave empty to scan ALL)
-- **Session name**: Name for your Telegram session file
+- **Session name**: Name for your Telegram session file. Enter a plain name (e.g., `user`) to store under `data/`, or provide a full/relative path to use it as-is (e.g., `data/user` or `C:\path\to\session`).
 - **Mode**: Choose `past`, `live`, `both`, or `id_range`
 
 ### Configuration File
@@ -92,8 +92,8 @@ Example `data/config.json`:
     "scan_old": true,
     "scan_all": false,
     "show_forward_tag": false,
-    "start_date": "YYYY-MM-DD",
-    "end_date": "YYYY-MM-DD",
+    "start_date": "",
+    "end_date": "",
     "resume_from_last": true,
     "highlight_keywords": true,
     "append_timestamp_footer": false
@@ -133,7 +133,9 @@ Example `data/config.json`:
   - Useful for reprocessing a known slice of history without scanning everything
   
 ### Keyword Highlighting
-- When `highlight_keywords` is enabled, matched keywords in forwarded text are sent with bold + italic + underline formatting.
+- When `highlight_keywords` is enabled, matched keywords in copied messages are sent with bold + italic + underline formatting.
+- Highlighting works in copy mode (`show_forward_tag: false`). Native forwards (`show_forward_tag: true`) cannot be modified by Telegram.
+- Message text is safely HTML-escaped so any `<` or `&` characters in the original content render correctly alongside the highlight markup.
 
 ### Getting Channel IDs
 
