@@ -5,7 +5,6 @@ CONFIG_DIR = "data"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 def load_config():
-    # Prefer data/config.json, fallback to root config.json once
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -31,7 +30,6 @@ def load_config():
             return None
     else:
         return None
-    # Strip deprecated pacing keys
     cfg.pop("min_send_interval", None)
     cfg.pop("max_flood_wait", None)
     return cfg
