@@ -1,4 +1,5 @@
 import re
+import html
 
 def match_keywords(text, keywords):
     if not text:
@@ -8,6 +9,11 @@ def match_keywords(text, keywords):
     
     text_lower = text.lower()
     return any(k.lower() in text_lower for k in keywords)
+
+def escape_html(text):
+    if not text:
+        return text
+    return html.escape(text)
 
 def highlight_keywords(text, keywords):
     if not text or not keywords:
