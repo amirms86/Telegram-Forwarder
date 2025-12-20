@@ -6,7 +6,7 @@ from telethon.errors.rpcerrorlist import FloodWaitError, SlowModeWaitError, Chat
 from telethon.errors import FloodWaitError as FloodWaitErrorAlt, SlowModeWaitError as SlowModeWaitErrorAlt
 from telethon.tl.types import MessageMediaWebPage
 from colorama import Fore, init
-from utils import match_keywords, strip_signature, highlight_keywords
+from utils import match_keywords, strip_signature, highlight_keywords, escape_html
 from state_manager import get_last_read_message_id, update_last_read_message_id
 
 init(autoreset=True)
@@ -177,8 +177,10 @@ class Forwarder:
                 if self.remove_signature and text:
                     text = strip_signature(text, self.signature_delimiters)
                 
-                if self.highlight_keywords and text:
-                    text = highlight_keywords(text, self.keywords)
+                if text:
+                    text = escape_html(text)
+                    if self.highlight_keywords:
+                        text = highlight_keywords(text, self.keywords)
 
                 footer = ""
                 if self.append_timestamp_footer:
