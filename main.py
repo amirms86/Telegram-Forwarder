@@ -102,8 +102,10 @@ def request_config():
             except ValueError:
                 print("Invalid input. Please enter numeric IDs for range.")
 
-    # Place session file under data/
-    session_path = os.path.join("data", session_name)
+    if os.path.isabs(session_name) or os.path.dirname(session_name):
+        session_path = session_name
+    else:
+        session_path = os.path.join("data", session_name)
     cfg = {
         "api_id": api_id,
         "api_hash": api_hash,
