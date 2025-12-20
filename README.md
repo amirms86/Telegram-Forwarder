@@ -92,8 +92,8 @@ Example `data/config.json`:
     "scan_old": true,
     "scan_all": false,
     "show_forward_tag": false,
-    "start_date": "",
-    "end_date": "",
+    "start_date": "YYYY-MM-DD",
+    "end_date": "YYYY-MM-DD",
     "resume_from_last": true,
     "highlight_keywords": true,
     "append_timestamp_footer": false
