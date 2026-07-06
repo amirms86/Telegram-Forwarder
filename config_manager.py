@@ -20,7 +20,6 @@ def load_config():
         try:
             with open("config.json", "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-            # migrate on next save
         except json.JSONDecodeError as e:
             print(f"Error: Config file 'config.json' is corrupted (invalid JSON): {e}")
             print("Please fix the config file or delete it to create a new one.")
@@ -43,3 +42,4 @@ def save_config(cfg):
     except Exception as e:
         print(f"Error saving config file '{CONFIG_FILE}': {e}")
         raise
+
