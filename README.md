@@ -1,89 +1,67 @@
-# 📨 Telegram Message Forwarder
+# Telegram Message Forwarder
 
-A powerful Python bot that automatically forwards messages from Telegram source channels to destination channels with advanced filtering and customization options.
+A Python Telegram forwarder built with Telethon. It reads messages from one or more source channels and sends matching messages to one or more destination channels.
 
-## ✨ Features
+## Features
 
-- 🔄 **Automatic Forwarding**: Forward messages from multiple source channels to multiple destination channels
-- 🔍 **Keyword Filtering**: Only forward messages containing specific keywords (Case-Insensitive)
-- 📝 **Signature Removal**: Automatically remove signatures from forwarded messages
-- 📜 **Old Message Scanning**: Scan and forward old messages from channels
-- 📅 **Date Range Filtering**: Restrict processing to a start/end date window
-- ⏯️ **Smart Resume**: Remembers the last processed message ID to avoid duplicates and resume scanning efficiently (works even in Copy mode)
-- 🎯 **Multiple Modes**: 
-  - `past` - Scan old messages (if enabled), forward matches, then exit
-  - `live` - Forward all new messages with keyword filtering (no old message scanning)
-  - `both` - Forward only messages matching keywords for both old and live messages
-  - `id_range` - Forward messages within a specific message ID range
-- 🏷️ **Forward Tag Control**: Choose to show or hide the "Forwarded from" tag in Telegram
-- 🎨 **Colorful Console Output**: Beautiful colored terminal output for better monitoring
+- Forward messages from multiple source channels to multiple destination channels
+- Filter messages by keywords, case-insensitively
+- Skip messages with blacklist keywords, even when a normal keyword matches
+- Scan old messages, listen for new messages, or do both
+- Reprocess a specific message ID range
+- Restrict processing by start and end date
+- Resume old-message scans from the last processed message ID
+- Remove message signatures before copying
+- Copy messages without the Telegram "Forwarded from" tag
+- Highlight matched keywords in copied text
+- Append the original message date and time as a footer
+- Preserve common media messages when copying
 
-## 🚀 Getting Started
+## Requirements
 
-### Prerequisites
+- Python 3.7 or newer
+- Telegram API credentials: `api_id` and `api_hash`
+- Read access to the source channels
+- Write access to the destination channels
 
-- Python 3.7 or higher
-- Telegram API credentials (API ID and API Hash)
-- Access to the source and destination Telegram channels
+Install dependencies:
 
-### 📦 Installation
+```bash
+pip install -r requirements.txt
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/amirms86/Telegram-Forwarder
-   cd Telegram-Forwarder
-   ```
+## Telegram API Credentials
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. Open [my.telegram.org](https://my.telegram.org).
+2. Log in with your Telegram phone number.
+3. Open **API development tools**.
+4. Create an application and copy the `api_id` and `api_hash`.
 
-3. **Get Telegram API Credentials**
-   - Go to [my.telegram.org](https://my.telegram.org)
-   - Log in with your phone number
-   - Go to "API development tools"
-   - Create a new application to get your `api_id` and `api_hash`
+## First Run
 
-## ⚙️ Configuration
-
-### First Time Setup
-
-When you run the script for the first time, it will prompt you for configuration:
+Start the bot with:
 
 ```bash
 python main.py
 ```
 
-You'll be asked to provide:
+If `data/config.json` does not exist, the script asks for configuration values and saves them automatically.
 
-- **API ID**: Your Telegram API ID (number)
-- **API HASH**: Your Telegram API Hash (string)
-- **Phone**: Your phone number in international format (e.g., +989123456789)
-- **Source channels**: Comma-separated list of source channel IDs (must be integers, e.g., `-123456789`)
-- **Destination channels**: Comma-separated list of destination channel IDs (must be integers)
-- **Keywords**: Comma-separated keywords to filter messages (applies in all modes; leave empty to forward all)
-- **Remove signature**: `y` to remove signatures, `n` to keep them
-- **Show 'Forwarded from' tag**: `y` to show the forward tag, `n` to hide it (copies message instead)
-- **Start/End Date**: Optional date range (YYYY-MM-DD). If both are set, old scanning is restricted to this window and live forwarding only processes messages within the same window.
-- **Resume from last**: `y` to resume from the last processed message (uses `forwarder_state.json`)
-- **Old scan limit**: Number of old messages to scan (enter `0` or leave empty to scan ALL)
-- **Session name**: Name for your Telegram session file. Enter a plain name (e.g., `user`) to store under `data/`, or provide a full/relative path to use it as-is (e.g., `data/user` or `C:\path\to\session`).
-- **Mode**: Choose `past`, `live`, `both`, or `id_range`
+## Configuration
 
-### Configuration File
+The configuration is stored in `data/config.json`.
 
-Your settings are saved in `data/config.json`. You can edit this file directly or run the setup again.
+Example:
 
-Example `data/config.json`:
 ```json
 {
     "api_id": 12345678,
     "api_hash": "your_api_hash_here",
-    "phone": "+your_phone_number_here",
-    "sources": [-123456789],
-    "destinations": [-123456789],
+    "phone": "+989123456789",
+    "sources": ["-1001234567890"],
+    "destinations": ["-1009876543210"],
     "keywords": ["urgent"],
+    "blacklist_keywords": ["spam"],
     "remove_signature": true,
     "signature_delimiters": ["--"],
     "limit_messages": 100,
@@ -92,146 +70,138 @@ Example `data/config.json`:
     "scan_old": true,
     "scan_all": false,
     "show_forward_tag": false,
-    "start_date": "YYYY-MM-DD",
-    "end_date": "YYYY-MM-DD",
+    "start_date": "",
+    "end_date": "",
     "resume_from_last": true,
     "highlight_keywords": true,
     "append_timestamp_footer": false
 }
 ```
 
-## 📖 How to Use
+### Configuration Fields
 
-### Basic Usage
+- `api_id`: Telegram API ID as a number.
+- `api_hash`: Telegram API hash as a string.
+- `phone`: Telegram account phone number in international format.
+- `sources`: Source channel IDs. IDs must be numeric strings or numbers.
+- `destinations`: Destination channel IDs. IDs must be numeric strings or numbers.
+- `keywords`: Words that allow a message to be forwarded. Leave empty to forward all messages.
+- `blacklist_keywords`: Words that always skip a message. Blacklist matches have priority over keyword matches.
+- `remove_signature`: Removes text after configured signature delimiters when copying messages.
+- `signature_delimiters`: Delimiters used to detect signatures.
+- `limit_messages`: Maximum number of old messages to scan. Use `null` or `0` with `scan_all` for all messages.
+- `session_name`: Telethon session path. A plain name is stored under `data/`.
+- `mode`: One of `past`, `live`, `both`, or `id_range`.
+- `scan_old`: Enables old-message scanning for modes that support it.
+- `scan_all`: Scans all old messages instead of applying `limit_messages`.
+- `show_forward_tag`: Uses native Telegram forwarding when `true`; copies messages when `false`.
+- `start_date`: Optional lower date bound in `YYYY-MM-DD` format.
+- `end_date`: Optional upper date bound in `YYYY-MM-DD` format.
+- `resume_from_last`: Continues old scanning after the last processed message ID.
+- `highlight_keywords`: Highlights matched keywords in copied text messages.
+- `append_timestamp_footer`: Appends the original message date and time to copied messages.
+- `id_min`: First message ID for `id_range` mode.
+- `id_max`: Last message ID for `id_range` mode.
 
-1. **Run the forwarder**
-   ```bash
-   python main.py
-   ```
+## Filtering Behavior
 
-2. **First run**: Enter your configuration when prompted
+Keyword matching is case-insensitive.
 
-3. **Subsequent runs**: The bot will use your saved configuration from `config.json`
+If `keywords` is empty, every message is eligible for forwarding. If `blacklist_keywords` contains a word found in the message text, the message is skipped. This means a message that contains both a normal keyword and a blacklist keyword is skipped.
 
-### Understanding Modes
+Examples:
 
-- **`past` mode**: 
-  - Scans old messages (if enabled) and forwards only those matching keywords
-  - Exits automatically after old message processing finishes (no live monitoring)
-  
-- **`live` mode**: 
-  - Forwards new messages that match `keywords` (leave `keywords` empty to forward all)
-  - Does not scan old messages
-
-- **`both` mode**: 
-  - Scans old messages (if enabled) and forwards only those matching keywords
-  - Monitors live messages and forwards only those matching keywords
-  - Similar to `past` mode but explicitly designed for both historical and live monitoring
-  
-- **`id_range` mode**:
-  - Forwards messages whose IDs fall within a specific range you provide
-  - Useful for reprocessing a known slice of history without scanning everything
-  
-### Keyword Highlighting
-- When `highlight_keywords` is enabled, matched keywords in copied messages are sent with bold + italic + underline formatting.
-- Highlighting works in copy mode (`show_forward_tag: false`). Native forwards (`show_forward_tag: true`) cannot be modified by Telegram.
-- Message text is safely HTML-escaped so any `<` or `&` characters in the original content render correctly alongside the highlight markup.
-
-### Getting Channel IDs
-
-To get a channel ID:
-1. Forward a message from the channel to [@userinfobot](https://t.me/userinfobot)
-2. The bot will reply with the channel ID
-3. Or use [@getidsbot](https://t.me/getidsbot)
-
-**Note**: Channel IDs are usually negative numbers (e.g., `-123456789`)
-
-## 🎛️ Advanced Features
-
-### Date Range Filtering
-
-- When both `start_date` and `end_date` are set in `config.json`, the bot scans only old messages within the specified window and forwards live messages only if their timestamp falls within the same window.
-- If only one of `start_date` or `end_date` is set, the bot applies that single bound to live messages; old scanning behaves normally unless both are set.
-
-### Signature Removal
-
-When `remove_signature` is enabled, the bot automatically removes signatures from messages. It looks for common delimiters like:
-- `--`
-- `—`
-- `Regards:`
-- `Thanks`
-
-You can customize delimiters in `config.json` under `signature_delimiters`.
-
-### Forward Tag Control
-
-- **`show_forward_tag: true`**: Messages are forwarded normally with the "Forwarded from" header
-- **`show_forward_tag: false`**: Messages are copied (sent as new messages) without the forward tag. Note that this mode might not preserve all message types perfectly (e.g., polls, specialized media), but works great for text and standard media.
-
-### Smart Resume
-
-- The bot creates a `forwarder_state.json` file to track the ID of the last processed message for each source channel.
-- If `resume_from_last` is enabled, it will read this file and only scan messages newer than the stored ID.
-- This works reliably even in "Copy Mode" (`show_forward_tag: false`) where the original message ID is lost in the destination channel.
-
-## 📁 Project Structure
-
+```json
+"keywords": ["sale"],
+"blacklist_keywords": ["expired"]
 ```
+
+A message containing `sale` is forwarded. A message containing both `sale` and `expired` is skipped.
+
+## Modes
+
+### `past`
+
+Scans old messages if `scan_old` is enabled, forwards matching messages, and exits after the scan.
+
+### `live`
+
+Listens for new messages and forwards matching messages. It does not scan old messages.
+
+### `both`
+
+Scans old messages first if `scan_old` is enabled, then continues listening for new messages.
+
+### `id_range`
+
+Processes messages between `id_min` and `id_max`, applies the keyword and blacklist filters, forwards matching messages, and exits.
+
+## Copy Mode and Forward Mode
+
+When `show_forward_tag` is `true`, messages are forwarded with Telegram's native forwarding behavior.
+
+When `show_forward_tag` is `false`, messages are copied as new destination messages. Copy mode allows signature removal, keyword highlighting, timestamp footers, and edited text. Some Telegram-specific message types may still fall back to native forwarding.
+
+## Date Filtering
+
+Dates use `YYYY-MM-DD` format.
+
+When both `start_date` and `end_date` are set, old-message scanning is limited to that date window. Live messages are also checked against the configured bounds.
+
+When only one bound is set, live messages use that single bound. Old scanning without a complete date window still scans normally and checks dates while iterating.
+
+## Resume State
+
+When `resume_from_last` is enabled, the bot stores the last processed message ID for each source in `data/forwarder_state.json`. Future scans continue after that ID.
+
+## Channel IDs
+
+Channel IDs are usually negative numbers. For many channels and supergroups they start with `-100`.
+
+To find a channel ID, forward a channel message to a Telegram ID helper bot such as `@userinfobot` or `@getidsbot`.
+
+## Project Structure
+
+```text
 Telegram-Forwarder/
-├── main.py              # Main entry point and configuration setup
-├── core.py              # Core forwarding logic
-├── config_manager.py    # Configuration file management
-├── state_manager.py     # Manages resume state (last processed IDs)
-├── utils.py             # Utility functions (keyword matching, signature removal)
-├── data/                # Config and session files
-│   ├── config.json      # Your configuration file (created after first run)
-│   └── user.session     # Your Telethon session file (name varies)
-├── forwarder_state.json # Stores last processed message IDs
-├── requirements.txt     # Python dependencies
-└── README.md            # This file
+├── main.py
+├── core.py
+├── config_manager.py
+├── state_manager.py
+├── utils.py
+├── requirements.txt
+├── README.md
+└── data/
+    ├── config.json
+    ├── forwarder_state.json
+    └── user.session
 ```
 
-## 🔧 Dependencies
+The `data/` files are generated locally and may not exist before the first run.
 
-- `telethon` - Telegram client library
-- `colorama` - Colored terminal output
+## Troubleshooting
 
-## ⚠️ Important Notes
+### Messages are not forwarding
 
-- **Security**: Never share your `config.json` file or session files (`user.session`) as they contain sensitive credentials
-- **Rate Limits**: Telegram has rate limits. Be careful when scanning large numbers of old messages
-- **Permissions**: Make sure your account has permission to read from source channels and write to destination channels
-- **Session Files**: The session file (e.g., `data/user.session`) stores your login session. Keep it secure!
-- **Data Directory**: The `data/` directory is created automatically when saving configuration or starting the client. You usually don't need to create it manually.
+- Check `keywords` and `blacklist_keywords`.
+- Make sure `scan_old` is enabled if you expect old messages to be scanned.
+- Confirm the source and destination channel IDs are correct.
+- Confirm the Telegram account can read from the source and write to the destination.
 
-## 🐛 Troubleshooting
+### Login or session problems
 
-### "Invalid API ID" error
-- Make sure you entered a valid number for API ID
+- Check `api_id`, `api_hash`, and `phone`.
+- Delete the local session file only if you intentionally want to log in again.
 
-### "Failed to process" errors
-- Check that you have access to both source and destination channels
-- Verify channel IDs are correct (they should be negative numbers)
-- Ensure your account has permission to forward messages
+### Permission errors
 
-### Messages not forwarding
-- Check your keyword filters (if in `past` or `both` mode)
-- Verify channel IDs are correct
-- Check console output for error messages
-- Ensure `scan_old` is enabled if you expect old messages to be scanned
+- Make sure the account is a member of the source channel.
+- Make sure the account has permission to post in the destination channel.
 
-## 📝 License
+### Rate limits
 
-This project is open source and available for personal use.
+Telegram may slow down or block heavy forwarding activity. Reduce scan size or wait before trying again.
 
-## 🤝 Contributing
+## Security
 
-Contributions, issues, and feature requests are welcome!
-
-## ⭐ Show Your Support
-
-If you find this project useful, please give it a star! ⭐
-
----
-
-**Made with ❤️ for Telegram automation**
+Do not share `data/config.json`, session files, or state files. They can contain sensitive account and channel information.
