@@ -46,6 +46,7 @@ def request_config():
     sources = _ask_list("Source channels (comma separated IDs): ", is_numeric=True)
     destinations = _ask_list("Destination channels (comma separated IDs): ", is_numeric=True)
     keywords = _ask_list("Keywords (comma separated): ")
+    blacklist_keywords = _ask_list("Blacklist keywords (comma separated, leave empty for none): ")
     
     remove_signature = input("Remove signature? (y/n): ").lower() == "y"
     show_forward_tag = input("Show 'Forwarded from' tag in Telegram? (y/n): ").lower() == "y"
@@ -113,6 +114,7 @@ def request_config():
         "sources": sources,
         "destinations": destinations,
         "keywords": keywords,
+        "blacklist_keywords": blacklist_keywords,
         "remove_signature": remove_signature,
         "signature_delimiters": signature_delimiters,
         "limit_messages": limit_messages,
@@ -139,9 +141,16 @@ async def start_loop():
     if cfg is None:
         cfg = request_config()
     else:
+        migrated = False
         if "highlight_keywords" not in cfg and "bold_keywords" in cfg:
             cfg["highlight_keywords"] = bool(cfg.get("bold_keywords", False))
             cfg.pop("bold_keywords", None)
+            migrated = True
+        if "blacklist_keywords" not in cfg:
+            cfg["blacklist_keywords"] = cfg.pop("black_keywords", []) if "black_keywords" in cfg else []
+            migrated = True
+        if migrated:
+            save_config(cfg)
         if cfg.get("mode") == "id_range":
             ok = True
             try:
@@ -181,3 +190,6 @@ async def start_loop():
 
 if __name__ == "__main__":
     asyncio.run(start_loop())
+
+
+
