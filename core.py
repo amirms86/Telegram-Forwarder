@@ -6,7 +6,7 @@ from telethon.errors.rpcerrorlist import FloodWaitError, SlowModeWaitError, Chat
 from telethon.errors import FloodWaitError as FloodWaitErrorAlt, SlowModeWaitError as SlowModeWaitErrorAlt
 from telethon.tl.types import MessageMediaWebPage
 from colorama import Fore, init
-from utils import match_keywords, strip_signature, highlight_keywords, escape_html
+from utils import should_forward_by_keywords, strip_signature, highlight_keywords, escape_html
 from state_manager import get_last_read_message_id, update_last_read_message_id
 
 init(autoreset=True)
@@ -60,6 +60,11 @@ class Forwarder:
         if not isinstance(keywords, list):
             raise ValueError("keywords must be a list")
         self.keywords = keywords
+
+        blacklist_keywords = cfg.get("blacklist_keywords", cfg.get("black_keywords", []))
+        if not isinstance(blacklist_keywords, list):
+            raise ValueError("blacklist_keywords must be a list")
+        self.blacklist_keywords = blacklist_keywords
         
         self.remove_signature = cfg.get("remove_signature", False)
         
@@ -221,13 +226,15 @@ class Forwarder:
                 had_any = False
                 async for msg in self.client.iter_messages(src, reverse=True, min_id=min_id, max_id=max_id):
                     had_any = True
-                    for d in self.destinations:
-                        try:
-                            action = await self._process_and_send(d, msg)
-                            print(Fore.GREEN + f"{action} message from {src} -> {d}")
-                            count += 1
-                        except Exception as e:
-                            print(Fore.RED + f"Failed to process from {src} to {d}: {e}")
+                    text = msg.text or ""
+                    if should_forward_by_keywords(text, self.keywords, self.blacklist_keywords):
+                        for d in self.destinations:
+                            try:
+                                action = await self._process_and_send(d, msg)
+                                print(Fore.GREEN + f"{action} message from {src} -> {d}")
+                                count += 1
+                            except Exception as e:
+                                print(Fore.RED + f"Failed to process from {src} to {d}: {e}")
                     update_last_read_message_id(src, msg.id)
                 if not had_any:
                     print(Fore.YELLOW + f"No messages in range for source {src}")
@@ -260,7 +267,7 @@ class Forwarder:
                             break
 
                         text = msg.text or ""
-                        if match_keywords(text, self.keywords):
+                        if should_forward_by_keywords(text, self.keywords, self.blacklist_keywords):
                             for dch in self.destinations:
                                 try:
                                     action = await self._process_and_send(dch, msg)
@@ -287,7 +294,7 @@ class Forwarder:
                         continue
 
                     text = msg.text or ""
-                    if match_keywords(text, self.keywords):
+                    if should_forward_by_keywords(text, self.keywords, self.blacklist_keywords):
                         for d in self.destinations:
                             try:
                                 action = await self._process_and_send(d, msg)
@@ -324,10 +331,10 @@ class Forwarder:
                 within_date = False
             
             if self.mode == "live":
-                if match_keywords(text, self.keywords):
+                if should_forward_by_keywords(text, self.keywords, self.blacklist_keywords):
                     should_forward = True
             elif self.mode in ("past", "both"):
-                if match_keywords(text, self.keywords):
+                if should_forward_by_keywords(text, self.keywords, self.blacklist_keywords):
                     should_forward = True
             
             if should_forward and within_date:
@@ -361,3 +368,5 @@ class Forwarder:
         self.register_handlers()
         print(Fore.GREEN + "Listening for new messages...")
         await self.client.run_until_disconnected()
+
+
