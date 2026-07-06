@@ -39,3 +39,4 @@ def update_last_read_message_id(source_id, message_id):
     if message_id > current_id:
         state[str(source_id)] = message_id
         save_state(state)
+
